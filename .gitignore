@@ -1,0 +1,26 @@
+# Build output
+build/
+cmake-build-*/
+*.exe
+*.o
+*.a
+*.so
+*.dll
+*.lib
+
+# IDE
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CMake
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Docs (course materials)
+docs/

@@ -1,0 +1,28 @@
+#ifndef REGEX_MATCHER_H
+#define REGEX_MATCHER_H
+
+#include "dfa.h"
+
+/* ========================================================================== */
+/*  公共 API                                                                  */
+/* ========================================================================== */
+
+/**
+ * DFA 精确匹配：从起始状态出发，逐个字符沿转移表行走。
+ * 如果所有字符都消耗完后停在接受状态，返回匹配成功。
+ *
+ * @param dfa   编译好的 DFA 机器（不可变）
+ * @param input 待匹配的输入字符串
+ * @return      匹配结果（matched=1 表示整个输入匹配成功）
+ */
+MatchResult dfa_match(const DFAMachine *dfa, const char *input);
+
+/**
+ * 将 DFA 的状态转移表以人类可读的方式打印到 stdout。
+ * 仅打印有意义的转移（next_id != -1），便于理解 DFA 结构。
+ *
+ * @param dfa  DFA 机器（可为 NULL）
+ */
+void dfa_dump(const DFAMachine *dfa);
+
+#endif /* REGEX_MATCHER_H */

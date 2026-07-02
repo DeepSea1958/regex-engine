@@ -1,0 +1,362 @@
+#include "capture.h"
+#include "nfa.h"
+#include "parser.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+/* ========================================================================== */
+/*  设计概要                                                                      */
+/*                                                                            */
+/*  捕获组追踪的核心思路：                                                       */
+/*                                                                            */
+/*  1. dfa_from_ast_with_groups(ast_root):                                      */
+/*     - 遍历 AST 统计 AST_GROUP 节点数量，为每组分配编号（从 1 开始）。          */
+/*     - 调用 nfa_from_ast(ast_root) 构建完整 NFA。                              */
+/*     - 调用 dfa_from_nfa(nfa) 构建 DFA。                                       */
+/*     - 分配 CaptureData（含组数量、子 AST 指针），                             */
+/*       注册到全局映射表（key = DFA.states 指针）。                             */
+/*     - 返回 DFA（按值）。                                                      */
+/*                                                                            */
+/*  2. dfa_match_captured(dfa, input):                                          */
+/*     - 通过 DFA.states 指针查全局映射表获得 CaptureData。                      */
+/*     - 调用 dfa_match(dfa, input) 找到完整匹配区间 [match_start, match_end)。  */
+/*     - 遍历 CaptureData 中记录的每个子 AST，                                  */
+/*       用子 AST 构建独立 DFA，在匹配区间内做最长匹配。                          */
+/*     - 填充 CapturedMatch.groups[]。                                          */
+/*                                                                            */
+/*  3. 为什么用子 DFA 而不是 NFA 模拟？                                          */
+/*     - NFAGraph 只暴露 start/end 指针，没有状态数组，无法做 epsilon-closure。   */
+/*     - 子 DFA 复用已有的 dfa_from_nfa + dfa_match，代码简洁。                   */
+/* ========================================================================== */
+
+/* ========================================================================== */
+/*  内部数据结构                                                                  */
+/* ========================================================================== */
+
+/**
+ * 捕获组在构建期的元数据。
+ * 在 DFA 构建时收集，匹配时使用。
+ */
+typedef struct {
+    int id;                 /* 组编号（从 1 开始） */
+    size_t pattern_pos;     /* 组在 pattern 中的起始偏移（'(' 的位置） */
+    const ASTNode *sub_ast; /* 组内部的子 AST（AST_GROUP.left） */
+} GroupMeta;
+
+/**
+ * 附加在 DFA 上的捕获组数据。
+ * 通过全局映射表与 DFAMachine.states 关联。
+ */
+typedef struct {
+    int group_count;                    /* 捕获组总数（不含第 0 组） */
+    GroupMeta *groups;                  /* groups[1..group_count] */
+} CaptureData;
+
+/* ========================================================================== */
+/*  全局映射表：DFA.states 指针 → CaptureData                                    */
+/* ========================================================================== */
+
+#define CAPTURE_MAP_CAPACITY 256
+
+typedef struct {
+    const void *dfa_states_ptr;
+    CaptureData *capdata;
+} CaptureMapEntry;
+
+static CaptureMapEntry capture_map[CAPTURE_MAP_CAPACITY];
+static int capture_map_used = 0;
+
+/** 在映射表中查找 CaptureData */
+static CaptureData *capture_map_find(const void *ptr) {
+    for (int i = 0; i < capture_map_used; i++) {
+        if (capture_map[i].dfa_states_ptr == ptr) {
+            return capture_map[i].capdata;
+        }
+    }
+    return NULL;
+}
+
+/** 在映射表中注册新条目 */
+static void capture_map_insert(const void *ptr, CaptureData *capdata) {
+    if (capture_map_used >= CAPTURE_MAP_CAPACITY) return;
+    capture_map[capture_map_used].dfa_states_ptr = ptr;
+    capture_map[capture_map_used].capdata = capdata;
+    capture_map_used++;
+}
+
+/** 从映射表中移除指定条目的 CaptureData */
+static void capture_map_remove(const void *ptr) {
+    for (int i = 0; i < capture_map_used; i++) {
+        if (capture_map[i].dfa_states_ptr == ptr) {
+            capture_map_used--;
+            for (int j = i; j < capture_map_used; j++) {
+                capture_map[j] = capture_map[j + 1];
+            }
+            break;
+        }
+    }
+}
+
+/* ========================================================================== */
+/*  AST 遍历：统计捕获组数量，收集组元数据                                         */
+/* ========================================================================== */
+
+/**
+ * 递归遍历 AST，统计捕获组数量。
+ * 每个 AST_GROUP 节点计为一个捕获组。
+ */
+static int count_groups_recursive(const ASTNode *node) {
+    if (!node) return 0;
+
+    int count = (node->type == AST_GROUP) ? 1 : 0;
+    count += count_groups_recursive(node->left);
+    count += count_groups_recursive(node->right);
+    return count;
+}
+
+/**
+ * 递归遍历 AST，为每个 AST_GROUP 收集元数据。
+ *
+ * @param node        当前 AST 节点
+ * @param next_id     下一个可用的组编号（从 1 开始）
+ * @param metas_out   输出数组，Caller 分配好大小为 group_count + 1
+ * @return            下一个可用的组编号
+ */
+static int collect_group_metas_recursive(const ASTNode *node, int next_id,
+                                          GroupMeta *metas_out) {
+    if (!node) return next_id;
+
+    if (node->type == AST_GROUP) {
+        metas_out[next_id].id = next_id + 1;
+        metas_out[next_id].sub_ast = node->left;
+        metas_out[next_id].pattern_pos = node->pos;
+        next_id++;
+        /* 继续遍历子节点（捕获组内部可能嵌套其他组） */
+        next_id = collect_group_metas_recursive(node->left, next_id, metas_out);
+        return next_id;
+    }
+
+    /* 非 GROUP 节点，继续递归左右子树 */
+    next_id = collect_group_metas_recursive(node->left, next_id, metas_out);
+    next_id = collect_group_metas_recursive(node->right, next_id, metas_out);
+    return next_id;
+}
+
+/* ========================================================================== */
+/*  子组匹配：用独立 DFA 在文本区间内定位捕获组                                    */
+/* ========================================================================== */
+
+/**
+ * 从子 AST 构建独立 DFA，在文本的 [text_start, text_start + text_len)
+ * 区间内做最长匹配（贪婪）。
+ *
+ * 策略：从 text_start 开始逐字符驱动子 DFA，记录最后一个接受状态的位置。
+ * 返回匹配长度（从 text_start 算起的偏移），0 表示无匹配。
+ *
+ * 这与 POSIX regexec 的贪婪语义一致：对于可重复量词，取最长匹配。
+ */
+static size_t match_sub_dfa_greedy(const ASTNode *sub_ast,
+                                    const char *text,
+                                    size_t text_start,
+                                    size_t text_len) {
+    if (!sub_ast || text_len == 0) return 0;
+
+    /* 从子 AST 构建 NFA */
+    NFAGraph sub_nfa = nfa_from_ast(sub_ast);
+    if (sub_nfa.state_count <= 0) {
+        return 0;
+    }
+
+    /* 从 NFA 构建 DFA */
+    DFAMachine sub_dfa = dfa_from_nfa(&sub_nfa);
+    nfa_free(&sub_nfa);
+
+    if (sub_dfa.states == NULL) {
+        return 0;
+    }
+
+    /* 在区间 [text_start, text_start + text_len) 内做最长匹配 */
+    const char *text_end = text + text_start + text_len;
+    const char *p = text + text_start;
+    int current_state = sub_dfa.start_state;
+    size_t last_accept = 0;
+
+    /* 从区间起点开始扫描，记录最后一个接受状态的位置（最长匹配） */
+    while (p < text_end) {
+        int idx = (unsigned char)*p;
+
+        /* 检查当前状态是否是接受状态 */
+        if (sub_dfa.states[current_state].is_accept) {
+            last_accept = (size_t)(p - text);
+        }
+
+        int next_state = sub_dfa.states[current_state].transitions[idx];
+        if (next_state == -1) {
+            break;
+        }
+
+        current_state = next_state;
+        p++;
+    }
+
+    /* 检查最终位置是否是接受状态 */
+    if (sub_dfa.states[current_state].is_accept) {
+        last_accept = (size_t)(p - text);
+    }
+
+    dfa_free(&sub_dfa);
+
+    /* 返回相对偏移（从 text_start 算起） */
+    if (last_accept > text_start) {
+        return last_accept - text_start;
+    }
+    return 0;
+}
+
+/* ========================================================================== */
+/*  dfa_from_ast_with_groups — 实现                                               */
+/* ========================================================================== */
+
+DFAMachine dfa_from_ast_with_groups(const ASTNode *ast_root) {
+    if (!ast_root) return (DFAMachine){0};
+
+    /* 1. 统计捕获组数量 */
+    int group_count = count_groups_recursive(ast_root);
+
+    /* 2. 构建 NFA → DFA */
+    NFAGraph nfa = nfa_from_ast(ast_root);
+    if (nfa.state_count <= 0) {
+        return (DFAMachine){0};
+    }
+
+    DFAMachine dfa = dfa_from_nfa(&nfa);
+    nfa_free(&nfa);
+
+    if (dfa.states == NULL) {
+        return dfa;
+    }
+
+    /* 3. 如果有捕获组，分配 CaptureData 并注册到映射表 */
+    if (group_count > 0) {
+        size_t metas_size = (size_t)(group_count + 1) * sizeof(GroupMeta);
+        size_t capdata_size = sizeof(CaptureData) + metas_size;
+
+        CaptureData *capdata = (CaptureData *)calloc(1, capdata_size);
+        if (!capdata) {
+            dfa_free(&dfa);
+            return (DFAMachine){0};
+        }
+
+        capdata->group_count = group_count;
+        capdata->groups = (GroupMeta *)((char *)capdata + sizeof(CaptureData));
+
+        /* 收集每个组的元数据 */
+        collect_group_metas_recursive(ast_root, 1, capdata->groups);
+
+        /* 注册到全局映射表，key = DFA states 数组的指针 */
+        capture_map_insert(dfa.states, capdata);
+    }
+
+    return dfa;
+}
+
+/* ========================================================================== */
+/*  dfa_capture_free — 实现                                                       */
+/* ========================================================================== */
+
+void dfa_capture_free(DFAMachine *dfa) {
+    if (!dfa || !dfa->states) return;
+
+    /* 从映射表中查找并释放 CaptureData */
+    CaptureData *capdata = capture_map_find(dfa->states);
+    if (capdata) {
+        capture_map_remove(dfa->states);
+        free(capdata);
+    }
+
+    /* 释放 DFA */
+    dfa_free(dfa);
+}
+
+/* ========================================================================== */
+/*  dfa_match_captured — 实现                                                     */
+/* ========================================================================== */
+
+CapturedMatch dfa_match_captured(const DFAMachine *dfa, const char *input) {
+    CapturedMatch result = {0};
+
+    if (!dfa || !input || !dfa->states) {
+        return result;
+    }
+
+    /* 1. 通过 DFA.states 指针查找 CaptureData */
+    CaptureData *capdata = capture_map_find(dfa->states);
+    int group_count = capdata ? capdata->group_count : 0;
+
+    /* 2. 用基础 DFA 匹配找到完整匹配区间 */
+    MatchResult full_match = dfa_match(dfa, input);
+    if (!full_match.matched) {
+        return result;
+    }
+
+    /* 3. 填充完整匹配信息（第 0 组） */
+    result.matched = 1;
+    result.start = full_match.start;
+    result.end = full_match.end;
+    result.length = full_match.length;
+    result.group_count = group_count;
+
+    /* 4. 分配捕获组数组（含第 0 组 = 完整匹配） */
+    size_t total_groups = (size_t)group_count + 1;
+    result.groups = (CaptureGroup *)calloc(total_groups, sizeof(CaptureGroup));
+    if (!result.groups) {
+        return result;
+    }
+
+    /* 第 0 组 = 完整匹配 */
+    result.groups[0].matched = 1;
+    result.groups[0].start = full_match.start;
+    result.groups[0].end = full_match.end;
+    result.groups[0].length = full_match.length;
+
+    /* 5. 对每个捕获组，用子 DFA 在匹配区间内定位 */
+    if (capdata && capdata->groups) {
+        for (int i = 1; i <= group_count; i++) {
+            GroupMeta *meta = &capdata->groups[i];
+            if (!meta->sub_ast) continue;
+
+            /* 在完整匹配的输入区间内做子组匹配 */
+            size_t sub_len = full_match.length;
+            if (sub_len == 0) continue;
+
+            /* 子表达式在区间内的匹配长度（相对偏移） */
+            size_t sub_len_matched = match_sub_dfa_greedy(
+                meta->sub_ast,
+                input,
+                full_match.start,
+                sub_len
+            );
+
+            if (sub_len_matched > 0) {
+                result.groups[i].matched = 1;
+                result.groups[i].start = full_match.start;
+                result.groups[i].end = full_match.start + sub_len_matched;
+                result.groups[i].length = sub_len_matched;
+            }
+        }
+    }
+
+    return result;
+}
+
+/* ========================================================================== */
+/*  captured_match_free — 实现                                                    */
+/* ========================================================================== */
+
+void captured_match_free(CapturedMatch *match) {
+    if (!match) return;
+    free(match->groups);
+    match->groups = NULL;
+    match->group_count = 0;
+}

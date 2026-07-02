@@ -3,6 +3,7 @@
 #include <windows.h>
 #endif
 #include "parser.h"
+#include "nfa.h"
 
 int main(int argc, char *argv[]) {
 #ifdef _WIN32
@@ -31,6 +32,16 @@ int main(int argc, char *argv[]) {
     ast_print(root);
     printf("\n");
 
+    NFAGraph nfa = nfa_from_ast(root);
+    if(!nfa.start){
+        printf("NFA 生成失败\n");
+        return 1;
+    }
+    printf("NFA:\n");
+    nfa_dump(&nfa);
+    printf("\n");
+
+    nfa_free(&nfa);
     ast_free(root);
     return 0;
 }

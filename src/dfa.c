@@ -141,6 +141,7 @@ static bool bool_set_eq(BoolSet a, BoolSet b, int size) {
 static void epsilon_closure(BoolSet set, NFAState **states, int nfa_count) {
     /* 显式栈 — 最坏情况下所有状态都压入一次 */
     int *stack = (int *)malloc((size_t)nfa_count * sizeof(int));
+    if (!stack) return;  /* 分配失败：保守处理，不扩展闭包 */
     int top = 0;
 
     /* 将所有当前在集合中的状态压入栈 */
@@ -191,16 +192,32 @@ DFAMachine dfa_from_nfa(const NFAGraph *nfa) {
     int dfa_cap = 16;
     DFAState *dfa_states = (DFAState *)malloc((size_t)dfa_cap * sizeof(DFAState));
     BoolSet  *dfa_sets   = (BoolSet  *)malloc((size_t)dfa_cap * sizeof(BoolSet));
+    if (!dfa_states || !dfa_sets) {
+        free(dfa_states);
+        free(dfa_sets);
+        return dfa;  /* dfa 已被初始化为 {0} */
+    }
     int dfa_count = 0;
 
     /* ---- 构造起始 DFA 状态：ε-closure({nfa.start}) ---- */
     BoolSet start_set = bool_set_new(nfa_count);
+    if (!start_set) {
+        free(dfa_sets);
+        free(dfa_states);
+        return dfa;  /* dfa 已被初始化为 {0} */
+    }
     start_set[nfa->start->id] = true;
     epsilon_closure(start_set, nfa->states, nfa_count);
 
     dfa_sets[0] = start_set;
     dfa_states[0].id = 0;
     dfa_states[0].transitions = (int *)malloc(256 * sizeof(int));
+    if (!dfa_states[0].transitions) {
+        bool_set_free(start_set);
+        free(dfa_sets);
+        free(dfa_states);
+        return dfa;
+    }
     for (int i = 0; i < 256; i++) {
         dfa_states[0].transitions[i] = -1;
     }
@@ -217,6 +234,7 @@ DFAMachine dfa_from_nfa(const NFAGraph *nfa) {
 
             /* move: 从 cur_set 中每个 NFA 状态沿匹配 ch 的边走一步 */
             BoolSet next_set = bool_set_new(nfa_count);
+            if (!next_set) continue;  /* 分配失败：跳过此字符 */
             int has_any = 0;
 
             for (int i = 0; i < nfa_count; i++) {
@@ -261,16 +279,31 @@ DFAMachine dfa_from_nfa(const NFAGraph *nfa) {
                 /* 新 DFA 状态：扩容 + 追加 */
                 if (dfa_count >= dfa_cap) {
                     dfa_cap *= 2;
-                    dfa_states = (DFAState *)realloc(
+                    DFAState *tmp_states = (DFAState *)realloc(
                         dfa_states, (size_t)dfa_cap * sizeof(DFAState));
-                    dfa_sets = (BoolSet *)realloc(
+                    if (!tmp_states) {
+                        bool_set_free(next_set);
+                        goto oom;
+                    }
+                    dfa_states = tmp_states;
+
+                    BoolSet *tmp_sets = (BoolSet *)realloc(
                         dfa_sets, (size_t)dfa_cap * sizeof(BoolSet));
+                    if (!tmp_sets) {
+                        bool_set_free(next_set);
+                        goto oom;
+                    }
+                    dfa_sets = tmp_sets;
                 }
 
                 target_id = dfa_count;
                 dfa_sets[target_id] = next_set;  /* 移交所有权 */
                 dfa_states[target_id].id = target_id;
                 dfa_states[target_id].transitions = (int *)malloc(256 * sizeof(int));
+                if (!dfa_states[target_id].transitions) {
+                    /* next_set 所有权已移交，在 oom 中统一释放 */
+                    goto oom;
+                }
                 for (int i = 0; i < 256; i++) {
                     dfa_states[target_id].transitions[i] = -1;
                 }
@@ -292,6 +325,7 @@ DFAMachine dfa_from_nfa(const NFAGraph *nfa) {
     dfa.start_state = 0;
 
     /* ---- 释放临时集合 ---- */
+oom:
     for (int i = 0; i < dfa_count; i++) {
         bool_set_free(dfa_sets[i]);
     }

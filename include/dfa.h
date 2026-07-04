@@ -56,9 +56,6 @@ typedef struct {
 /**
  * 子集构造法：从 NFA 构建 DFA。
  *
- * 这是 NFA→DFA 转换的核心入口，实现编译原理中经典的
- * 子集构造算法（Subset Construction Algorithm）。
- *
  * 算法步骤：
  *   1. ε-closure({nfa.start}) → DFA 状态 0
  *   2. BFS 遍历所有 DFA 状态，对当前状态 S 和每个字符 c∈[0,255]：
@@ -68,11 +65,6 @@ typedef struct {
  *      d. 记录转移 S --c--> target
  *   3. 若 DFA 状态中包含 NFA 的 accept 状态，则该 DFA 状态也是 accept
  *
- * 实现细节：
- * - 新状态总是追加到数组末尾，线性遍历即可完成 BFS，无需额外队列。
- * - 状态去重通过比较底层 BoolSet（memcmp）完成，正确性依赖于
- *   ε-closure 的确定性（同一个输入集合总是展开成同一个闭包）。
- *
  * @param nfa  完整的 NFA 图（Thompson 构造产物，允许 ε 边）
  * @return     确定化的 DFA 机器（调用者负责调用 dfa_free() 释放）
  */
@@ -80,7 +72,6 @@ DFAMachine dfa_from_nfa(const NFAGraph *nfa);
 
 /**
  * 释放 DFA 机器占用的所有内存。
- * 包括每个状态的 transitions 数组以及 states 数组本身。
  * 重复释放同一个对象是安全的（幂等操作）。
  */
 void dfa_free(DFAMachine *dfa);
@@ -99,23 +90,15 @@ void dfa_free(DFAMachine *dfa);
 MatchResult dfa_match(const DFAMachine *dfa, const char *input);
 
 /**
- * 打印 DFA 的状态转移表（调试用）。
- * 仅输出有意义的转移（next_id != -1），可打印字符直接显示，
- * 不可打印字符以十六进制（0x%02x）表示。
- * 接受 NULL 参数（输出 "(null DFA)"）。
+ * 将 DFA 的状态转移表以人类可读的方式打印到 stdout。
+ * 仅打印有意义的转移（next_id != -1）。
+ *
+ * @param dfa  DFA 机器（可为 NULL）
  */
 void dfa_dump(const DFAMachine *dfa);
 
 /**
  * 将 DFA 的状态转移表输出为 Graphviz DOT 格式（可视化调试用）。
- *
- * 输出规约：
- * - 有向图 digraph DFA { rankdir=LR; ... }
- * - 接受状态：双圈 (shape=doublecircle)，普通状态：圆圈 (shape=circle)
- * - 起始状态由不可见节点 (shape=point) 的边标记
- * - 边标签合并连续字符为区间（如 "a-c"、"0-9"），避免 256 条独立边的输出爆炸
- * - -1 转移不画边
- * - 接受 NULL 参数或空机器（输出空图）
  *
  * @param dfa  DFA 机器
  * @param fp   输出文件（可为 stdout）
@@ -124,6 +107,7 @@ void dfa_dump_dot(const DFAMachine *dfa, FILE *fp);
 
 /**
  * 将 DFA 状态转移表输出为 Graphviz DOT 文件。
+ * 等价于 dfa_dump_dot(dfa, fp)，但接受文件路径。
  *
  * @param dfa       DFA 机器
  * @param filepath  输出文件路径（如 "DOT/dfa_min.dot"）

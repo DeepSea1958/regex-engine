@@ -134,6 +134,11 @@ static bool bool_set_eq(BoolSet a, BoolSet b, int size) {
  * ε-闭包 = 从集合中任一状态出发，仅沿 ε 边可以到达的所有状态的并集。
  * 使用显式栈做 DFS，避免递归栈溢出。
  *
+ * 一个 NFA 状态最多有两条 ε 出边（Thompson 构造保证），经过 BFS/DFS 处理后
+ * 所有可达的 ε 路径均被遍历。
+ *
+ * 在图论上，ε-转移构成一个有向图，本函数计算从集合 S 出发的 ε-传递闭包。
+ *
  * @param set        输入：起始状态集合；输出：起始集合 ∪ ε-可达集合
  * @param states     NFA 状态数组（按 id 索引）
  * @param nfa_count  NFA 状态总数
@@ -241,7 +246,9 @@ DFAMachine dfa_from_nfa(const NFAGraph *nfa) {
                 if (!cur_set[i]) continue;
                 NFAState *s = nfa->states[i];
 
-                /* 检查 edge1（非 ε 边） */
+                /* 检查 edge1（非 ε 边）。
+                 * 注意 edge1_next 和 edge2_next 是互斥的两条出边，
+                 * 需要分别检查，不可遗漏其中一条。 */
                 if (s->edge1_next && s->edge1_type != NFA_EDGE_EPSILON &&
                     edge_matches(s->edge1_type, s->edge1_char, s->edge1_esc,
                                  s->edge1_bracket.str, s->edge1_bracket.len, ch)) {

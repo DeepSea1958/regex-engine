@@ -384,15 +384,55 @@ static void test_curly_no_digit(void) {
 /* --- token_to_string --- */
 static void test_token_to_string(void) {
     Token t;
+
+    /* 已覆盖的类型 */
     t = (Token){ .type = TOK_CHAR };
-    CHECK_STR("普通字符", token_to_string(t), "普通字符 → 中文名");
+    CHECK_STR("普通字符", token_to_string(t), "TOK_CHAR → 中文名");
 
     t = (Token){ .type = TOK_EOF };
-    CHECK_STR("输入结束", token_to_string(t), "EOF → 中文名");
+    CHECK_STR("输入结束", token_to_string(t), "TOK_EOF → 中文名");
 
     t = (Token){ .type = TOK_ERROR };
-    CHECK_STR("词法错误", token_to_string(t), "ERROR → 中文名");
+    CHECK_STR("词法错误", token_to_string(t), "TOK_ERROR → 中文名");
 
+    /* 新增：其余所有枚举值 */
+    t = (Token){ .type = TOK_ESCAPE };
+    CHECK_STR("转义序列", token_to_string(t), "TOK_ESCAPE → 中文名");
+
+    t = (Token){ .type = TOK_DOT };
+    CHECK_STR("点号 .", token_to_string(t), "TOK_DOT → 中文名");
+
+    t = (Token){ .type = TOK_BRACKET };
+    CHECK_STR("字符集合 [...]", token_to_string(t), "TOK_BRACKET → 中文名");
+
+    t = (Token){ .type = TOK_STAR };
+    CHECK_STR("星号 *", token_to_string(t), "TOK_STAR → 中文名");
+
+    t = (Token){ .type = TOK_PLUS };
+    CHECK_STR("加号 +", token_to_string(t), "TOK_PLUS → 中文名");
+
+    t = (Token){ .type = TOK_QUESTION };
+    CHECK_STR("问号 ?", token_to_string(t), "TOK_QUESTION → 中文名");
+
+    t = (Token){ .type = TOK_CURLY };
+    CHECK_STR("量词 {m,n}", token_to_string(t), "TOK_CURLY → 中文名");
+
+    t = (Token){ .type = TOK_LPAREN };
+    CHECK_STR("左括号 (", token_to_string(t), "TOK_LPAREN → 中文名");
+
+    t = (Token){ .type = TOK_RPAREN };
+    CHECK_STR("右括号 )", token_to_string(t), "TOK_RPAREN → 中文名");
+
+    t = (Token){ .type = TOK_PIPE };
+    CHECK_STR("竖线 |", token_to_string(t), "TOK_PIPE → 中文名");
+
+    t = (Token){ .type = TOK_CARET };
+    CHECK_STR("脱字符 ^", token_to_string(t), "TOK_CARET → 中文名");
+
+    t = (Token){ .type = TOK_DOLLAR };
+    CHECK_STR("美元符 $", token_to_string(t), "TOK_DOLLAR → 中文名");
+
+    /* 非法类型 */
     t = (Token){ .type = (RegexTokenType)-1 };
     CHECK_STR("未知类型", token_to_string(t), "非法类型 → 中文名");
 }

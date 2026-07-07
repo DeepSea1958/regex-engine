@@ -1,0 +1,105 @@
+# Complex and Real-World Scenarios - 复杂和真实场景测试
+# Format: pattern text expected_result [expected_start] [expected_end]
+
+# Email patterns
+[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} user@example.com 1 0 15
+[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} user.name@example.co.uk 1 0 23
+[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} user@ 0
+[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} @example.com 0
+[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} invalid-email 0
+
+# URL patterns
+https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} https://example.com 1 0 19
+https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} http://sub.example.org 1 0 23
+https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} ftp://example.com 0
+https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} example.com 0
+
+# Phone number patterns
+\d{3}-\d{3}-\d{4} 123-456-7890 1 0 12
+\d{3}-\d{3}-\d{4} 12-345-6789 0
+\d{3}-\d{3}-\d{4} 123-45-6789 0
+\d{3}-\d{3}-\d{4} 1234-56-789 0
+
+# IP address patterns (simplified)
+\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3} 192.168.1.1 1 0 11
+\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3} 255.255.255.255 1 0 15
+\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3} 999.999.999.999 1 0 15
+\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3} 192.168.1 0
+
+# Date patterns
+\d{4}-\d{2}-\d{2} 2024-01-15 1 0 10
+\d{4}-\d{2}-\d{2} 2024/01/15 0
+\d{4}-\d{2}-\d{2} 24-01-15 0
+
+# Time patterns
+\d{2}:\d{2}:\d{2} 14:30:00 1 0 8
+\d{2}:\d{2}:\d{2} 14:30 0
+
+# Identifier patterns (variable names, etc.)
+[a-zA-Z_][a-zA-Z0-9_]* myVariable123 1 0 11
+[a-zA-Z_][a-zA-Z0-9_]* _temp 1 0 5
+[a-zA-Z_][a-zA-Z0-9_]* 123invalid 0
+[a-zA-Z_][a-zA-Z0-9_]* invalid! 0
+
+# File path patterns (simplified)
+[a-zA-Z]:\\[^:]+ c:\temp\file.txt 1 0 15
+[a-zA-Z]:\\[^:]+ c:\temp\file.txt 1 0 15
+
+# HTML tag patterns (simplified)
+<[a-zA-Z]+> <div> 1 0 5
+<[a-zA-Z]+> <span> 1 0 6
+<[a-zA-Z]+> div 0
+
+# JSON number patterns
+-?\d+(\.\d+)? 123 1 0 3
+-?\d+(\.\d+)? -123 1 0 4
+-?\d+(\.\d+)? 123.456 1 0 7
+-?\d+(\.\d+)? -123.456 1 0 8
+-?\d+(\.\d+)? abc 0
+
+# Complex nested patterns
+a(b(c)d)e abcde 1 0 5
+a(b|c)+d abd 1 0 3
+a(b|c)+d abcd 1 0 4
+a(b|c)+d acd 1 0 3
+a(b|c)+d ad 0
+
+# Patterns with multiple levels
+(ab(cd)ef) abcdef 1 0 6
+(ab(cd)ef) abxef 0
+
+# Alternation with quantifiers
+(abc|def|ghi)+ abcdefghi 1 0 9
+(abc|def|ghi)+ defghiabc 1 0 9
+
+# Long patterns for performance testing
+a.*z abcdefghijklmnopqrstuvwxyz 1 0 26
+a.*z axyz 1 0 4
+a.*z az 1 0 2
+
+# Boundary condition patterns
+^$ 1 0 0
+^$ a 0
+
+.* anything 1 0 8
+.* 1 0 0
+
+.+ anything 1 0 8
+.+ 0
+
+^.*$ anything 1 0 8
+^.*$ 1 0 0
+
+# Patterns that match empty strings
+a? abc 1 0 0
+a* abc 1 0 0
+(abc)? abc 1 0 0
+
+# Patterns that match at multiple positions
+a aaa 1 0 1
+ab abab 1 0 2
+
+# Complex nested quantifiers
+(a+)+ aaaa 1 0 4
+((a+)(b+))+ aabb 1 0 4
+((a+)(b+))+ aaabbb 1 0 6

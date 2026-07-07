@@ -1,0 +1,47 @@
+# Literal Matching Tests - 字面量匹配测试
+# Format: pattern text expected_result [expected_start] [expected_end]
+
+# Single character literals
+a a 1 0 1
+a b 0
+a aa 1 0 1
+a aaa 1 0 1
+
+# Multi-character literals
+hello hello 1 0 5
+hello helloworld 1 0 5
+hello worldhello 1 5 10
+hello world 0
+hello he 0
+hello ello 0
+
+# Case sensitivity (assuming engine is case-sensitive)
+Hello hello 0
+hello Hello 0
+HELLO HELLO 1 0 5
+hello HELLO 0
+
+# Literals with special characters (escaped)
+# Note: Depends on engine's escape handling
+# \. . 1 0 1
+# \* * 1 0 1
+# \+ + 1 0 1
+# \? ? 1 0 1
+# \( ( 1 0 1
+# \) ) 1 0 1
+# \[ [ 1 0 1
+# \] ] 1 0 1
+# \\ \ 1 0 1
+
+# Multiple occurrences
+aaa aaaaa 1 0 3
+aaa aaaaa 1 0 3
+aaa aa 0
+
+# Empty string tests
+# Note: Empty pattern behavior depends on engine
+# (empty) abc 1 0 0
+
+# Whitespace
+"hello world" "hello world" 1 0 11
+hello\sworld "hello world" 1 0 11

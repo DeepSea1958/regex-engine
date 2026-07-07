@@ -1,0 +1,92 @@
+# Dot (Any Character) Tests - 点号匹配测试
+# Format: pattern text expected_result [expected_start] [expected_end]
+
+# Basic dot matches
+. a 1 0 1
+. b 1 0 1
+. c 1 0 1
+. 0 1 0 1
+. 9 1 0 1
+. ! 1 0 1
+. @ 1 0 1
+. # 1 0 1
+. $ 1 0 1
+. % 1 0 1
+
+# Dot with different character types
+. A 1 0 1
+. Z 1 0 1
+. a 1 0 1
+. z 1 0 1
+. 0 1 0 1
+. 9 1 0 1
+. space 1 0 1  # Note: Replace "space" with actual space
+. _ 1 0 1
+. - 1 0 1
+
+# Multiple dots
+.. ab 1 0 2
+.. abc 1 0 2
+.. a 0
+.... abcd 1 0 4
+.... abc 0
+.... abcde 1 0 4
+
+# Dot with quantifiers
+.* abc 1 0 3
+.* anytext 1 0 7
+.* 1 0 0
+.+ abc 1 0 3
+.+ 0
+.+ a 1 0 1
+.?? a 1 0 1
+
+# Dot in middle of pattern
+a.c abc 1 0 3
+a.c axc 1 0 3
+a.c aac 1 0 3
+a.c ab 0
+a.c ac 0
+a.c abcd 1 0 3
+
+# Multiple dots in pattern
+a..c abbc 1 0 4
+a..c axxc 1 0 4
+a..c abc 0
+a..c axc 0
+
+# Dot patterns with alternation
+a.c|a.d abc 1 0 3
+a.c|a.d abd 1 0 3
+a.c|a.d abe 0
+a.c|a.d abcd 1 0 3
+
+# Dot edge cases
+. 0  # Empty string? Usually doesn't match
+.^ 1 0 1  # Should match any single character
+.$ 1 0 1
+
+# Dot and character classes
+.[0-9] a1 1 0 2
+.[0-9] b2 1 0 2
+.[0-9] a 0
+.[0-9] 1 0
+[a-z]. a1 1 0 2
+[a-z]. b2 1 0 2
+
+# Complex dot patterns
+a.*c abc 1 0 3
+a.*c axc 1 0 3
+a.*c axyzc 1 0 5
+a.*c ac 1 0 2
+a.*c ab 0
+
+a.+c abc 1 0 3
+a.+c axc 1 0 3
+a.+c ac 0
+a.+c axyc 1 0 4
+
+a.?c abc 1 0 3
+a.?c ac 1 0 2
+a.?c axc 1 0 3
+a.?c abxc 0

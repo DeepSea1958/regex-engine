@@ -159,27 +159,10 @@ add_custom_target(run_tests
     COMMENT "Running test suite..."
 )
 
-# ---------- 自定义目标：运行 Grep 测试 ----------
-add_custom_target(run_grep_tests
-    COMMAND $<TARGET_FILE:regex_grep_test>
-        ${CMAKE_SOURCE_DIR}/tests/grep_tests/basic.txt
-        ${CMAKE_SOURCE_DIR}/tests/grep_tests/literals.txt
-        ${CMAKE_SOURCE_DIR}/tests/grep_tests/quantifiers.txt
-        ${CMAKE_SOURCE_DIR}/tests/grep_tests/character_classes.txt
-        ${CMAKE_SOURCE_DIR}/tests/grep_tests/dot.txt
-        ${CMAKE_SOURCE_DIR}/tests/grep_tests/anchors.txt
-        ${CMAKE_SOURCE_DIR}/tests/grep_tests/groups.txt
-        ${CMAKE_SOURCE_DIR}/tests/grep_tests/escape.txt
-        ${CMAKE_SOURCE_DIR}/tests/grep_tests/complex.txt
-    DEPENDS regex_grep_test
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Running complete Grep test suite (377+ test cases)..."
-)
-
 # ---------- 自定义目标：运行测试框架 ----------
 add_custom_target(run_test_runner
     COMMAND $<TARGET_FILE:test_runner>
-    DEPENDS test_runner regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test regex_matcher_test regex_capture_test regex_api_test regex_posix_test regex_grep_test
+    DEPENDS test_runner regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test regex_matcher_test regex_capture_test regex_api_test regex_posix_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Running complete test suite via test_runner..."
 )

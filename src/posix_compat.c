@@ -82,7 +82,7 @@ static int count_capture_groups(const char *pattern) {
 /*  regcomp — 编译正则表达式                                                    */
 /* -------------------------------------------------------------------------- */
 
-int regcomp(regex_prog_t *prog, const char *pattern, int cflags) {
+int bench_regcomp(regex_prog_t *prog, const char *pattern, int cflags) {
     if (!prog || !pattern || !pattern[0]) {
         if (prog) {
             memset(prog, 0, sizeof(*prog));
@@ -157,7 +157,7 @@ int regcomp(regex_prog_t *prog, const char *pattern, int cflags) {
 /*  regexec — 执行匹配                                                          */
 /* -------------------------------------------------------------------------- */
 
-int regexec(const regex_prog_t *prog, const char *string,
+int bench_regexec(const regex_prog_t *prog, const char *string,
             size_t nmatch, regmatch_t pmatch[], int eflags)
 {
     if (!prog || !string) {
@@ -246,7 +246,7 @@ int regexec(const regex_prog_t *prog, const char *string,
 /*  regfree — 释放编译后的正则程序                                               */
 /* -------------------------------------------------------------------------- */
 
-void regfree(regex_prog_t *prog) {
+void bench_regfree(regex_prog_t *prog) {
     if (!prog) {
         return;
     }
@@ -272,7 +272,7 @@ void regfree(regex_prog_t *prog) {
 /*  regerror — 错误信息                                                         */
 /* -------------------------------------------------------------------------- */
 
-const char *regerror(int errcode, const regex_prog_t *preg,
+const char *bench_regerror(int errcode, const regex_prog_t *preg,
                      char *errbuf, size_t ebuffersize)
 {
     const char *msg;

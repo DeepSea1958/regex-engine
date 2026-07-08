@@ -104,7 +104,7 @@ enum {
  * @param cflags  编译标志（REG_EXTENDED / REG_ICASE / REG_NOSUB / REG_NEWLINE）
  * @return        0 = 成功, 非 0 = 错误码（存于 prog->re_errcode）
  */
-int regcomp(regex_prog_t *prog, const char *pattern, int cflags);
+int bench_regcomp(regex_prog_t *prog, const char *pattern, int cflags);
 
 /**
  * 执行匹配。
@@ -117,13 +117,13 @@ int regcomp(regex_prog_t *prog, const char *pattern, int cflags);
  * @param eflags    执行标志（REG_NOTBOL / REG_NOTEOL / REG_NEWLINE，暂不实现）
  * @return          0 = 匹配成功, REG_NOMATCH = 未匹配, 其他 = 错误码
  */
-int regexec(const regex_prog_t *prog, const char *string,
+int bench_regexec(const regex_prog_t *prog, const char *string,
             size_t nmatch, regmatch_t pmatch[], int eflags);
 
 /**
  * 释放编译后的正则程序。
  */
-void regfree(regex_prog_t *prog);
+void bench_regfree(regex_prog_t *prog);
 
 /**
  * 获取错误信息。
@@ -134,7 +134,7 @@ void regfree(regex_prog_t *prog);
  * @param ebuffersize 缓冲大小
  * @return        errbuf 指针（方便链式调用）
  */
-const char *regerror(int errcode, const regex_prog_t *preg,
+const char *bench_regerror(int errcode, const regex_prog_t *preg,
                      char *errbuf, size_t ebuffersize);
 
 #ifdef __cplusplus

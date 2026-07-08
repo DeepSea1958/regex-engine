@@ -144,10 +144,10 @@ int main(int argc, char *argv[]) {
                 /* 测试 POSIX 兼容层 */
                 {
                     regex_prog_t rp;
-                    if (regcomp(&rp, pattern, REG_EXTENDED) == REG_OK) {
+                    if (bench_regcomp(&rp, pattern, REG_EXTENDED) == REG_OK) {
                         regmatch_t pmatch[1];
                         const char *test_str = "bc";
-                        int rc = regexec(&rp, test_str, 1, pmatch, 0);
+                        int rc = bench_regexec(&rp, test_str, 1, pmatch, 0);
                         if (rc == 0) {
                             printf("  regexec(\"%s\"): ✓ rm_so=%lld rm_eo=%lld\n",
                                    test_str, pmatch[0].rm_so, pmatch[0].rm_eo);
@@ -155,10 +155,10 @@ int main(int argc, char *argv[]) {
                             printf("  regexec(\"%s\"): ✗ 未匹配\n", test_str);
                         } else {
                             char errbuf[256];
-                            regerror(rc, &rp, errbuf, sizeof(errbuf));
+                            bench_regerror(rc, &rp, errbuf, sizeof(errbuf));
                             printf("  regexec(\"%s\"): ✗ 错误: %s\n", test_str, errbuf);
                         }
-                        regfree(&rp);
+                        bench_regfree(&rp);
                     }
                 }
 
